@@ -31,16 +31,16 @@ function NymphoImages(imageDirectoryPath){
             var pics = this.childFiles(folder);
             pics.forEach(function(file){
                 imgs.push({
-                    filename: file,
-                    parentFolder: folder,
-                    fullPath: path.join(this.imageDirectory, folder, file)
+                    name: file,
+                    parent: folder,
+                    path: path.join(this.imageDirectory, folder, file)
                 });
             }, this);
         }, this);
         return imgs;
     };
 
-    this.randomImage = function(){
+    this.randomMedia = function(){
         var numOfImages = this.images().length;
         var imgIndex = randomInt(numOfImages);
         return this.images()[imgIndex];

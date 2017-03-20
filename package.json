@@ -6,12 +6,16 @@
   "dependencies": {
     "debug": "^2.6.3",
     "lodash": "^4.17.4",
+    "mysql2": "^1.2.0",
+    "sequelize": "^3.30.2",
     "twit": "^2.2.5",
     "twitter": "^1.7.0"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "app": "DEBUG=* node app",
+    "bot": "DEBUG=* node bot"
   },
   "keywords": [],
   "author": "",

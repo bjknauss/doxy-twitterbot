@@ -10,17 +10,64 @@ var imgs = new NymphoImages('/Users/brendenknauss/Pictures/tweet_pics/');
 var numOfTweets = 0;
 var tweetInterval = 1 * 60 * 1000;
 var T = new Twit(tokens);
+var gifPath = '/Users/brendenknauss/code/doxy-twitterbot/cute_bunny_girl.gif';
 
 //var img = require("fs").readFileSync("sakura.jpg");
+
+// T.get('friends/ids', {screen_name: "NymphoNode", stringify_ids: true}, function (error, data, response){
+//     console.log(data);
+// })
+
+// T.get('friends/ids', {stringify_ids: true}, function (error, data, response){
+//     console.log(data);
+// })
+
+T.get('lists/ownerships',  function (error, data, response){
+    console.log(data);
+})
 
 function init(){
     console.log("beginning tweets...");
     //T.get('search/tweets', { q: 'banana since:2011-07-11', count: 1 }, function(err, data, response) {
         //     console.log(data)
         // })
-    tweetRandomImage2();
+    //tweetRandomImage2();
     setInterval(tweetRandomImage, tweetInterval);
+    T.postMediaChunked({file_path: gifPath}, function(error, data, response){
+        console.log(data);
+    });
 }
+
+
+//var stream = T.stream('user', {stringify_friend_ids: true});
+
+/*
+stream.on('friends', function(friendsMessage){
+    // returns friends_str as key to array
+    console.log("Entered Friend event:", friendsMessage);
+});
+
+stream.on('retweeted_tweet', (retweet)=>{
+    console.log('retweeted', retweet);
+});
+
+stream.on('quoted_tweet', (quoted)=>{
+    console.log('quoted', quoted);
+})
+stream.on('favorite', (event)=>{
+    console.log('favorite', event);
+})
+*/
+
+// stream.on('message', function(msg){
+//     console.log("------------------- MESSAGE -----------------");
+//     console.log(msg);
+// })
+
+// stream.on('user_event', function(msg){
+//     console.log("------------------- USER EVENT -----------------");
+//     console.log(msg);
+// })
 
 
 /*
@@ -53,15 +100,15 @@ stream.on('error', function(error) {
 
 function writeStatus(tweet){
     var status = "Tweet " + numOfTweets;
-    status += ", #lewd #hentai #" + tweet.parentFolder;
+    status += ", #lewd #hentai #" + tweet.parent;
     return status;
 }
 
 
 function tweetRandomImage(){
     console.log("entering tweetrandom");
-    var tweetImage = imgs.randomImage();
-    var imgBuffer = fs.readFileSync(tweetImage.fullPath, 'base64');
+    var tweetImage = imgs.randomMedia();
+    var imgBuffer = fs.readFileSync(tweetImage.path, 'base64');
     console.log("img buffered");
     T.post('media/upload', {media: imgBuffer}, function(error, data, response){
         if(error){
@@ -71,7 +118,7 @@ function tweetRandomImage(){
         debug("result.data", data);
         var tweet = {
             status: writeStatus(tweetImage),
-            media_ids: [data.media_id_string]
+            media_ids: data.media_id_string
         };
         T.post('statuses/update', tweet, function(err, data, res){
             if(err){
@@ -82,37 +129,9 @@ function tweetRandomImage(){
         });
     });
 }
+//tweetRandomImage();
 
-
-
-function tweetRandomImage2(){
-    console.log("entering tweetrandom");
-    var tweetImage = imgs.randomImage();
-    var imgBuffer = fs.readFileSync(tweetImage.fullPath, 'base64');
-    console.log("img buffered");
-    T.post('media/upload', {media_data: imgBuffer})
-        .catch(function(error){
-            console.log(error);
-        })
-        .then(function(result){
-            console.log("entering update status");
-            debug("result.data", result.data);
-            var tweet = {
-                status: writeStatus(tweetImage),
-                media_ids: [result.data.media_id_string]
-            };
-            T.post('statuses/update', tweet, function(err, data, res){
-                if(err){
-                    console.log("app:tweetRandomImage", err);
-                }else{
-                    numOfTweets += 1;
-                }
-            })
-        });
-}
-
-
-init();
+//init();
 
 
 /*
