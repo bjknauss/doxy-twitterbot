@@ -1,7 +1,7 @@
 var _ = require('lodash');
 var fs = require('fs');
 var Twit = require('twit');
-var MediaFetcher = require('./files.js');
+var MediaFetcher = require('./media-fetcher');
 var debug = require('debug')('bot');
 var mime = require('mime');
 var tokens = require("./tokens.json");
@@ -25,7 +25,8 @@ function Bot(username, twitterParams, mediaRoot){
     self._friends = [];
     self._retweet_times = {};
     self._twit = new Twit(twitterParams);
-    self._mf = new MediaFetcher(mediaRoot);
+    self._mf = new MediaFetcher();
+    self._mf.init(mediaRoot);
     self.isRunning = function(){
         return self._running;
     }
