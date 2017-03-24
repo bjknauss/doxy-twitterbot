@@ -5,6 +5,7 @@
   "main": "app.js",
   "dependencies": {
     "debug": "^2.6.3",
+    "jsonfile": "^2.4.0",
     "lodash": "^4.17.4",
     "mysql2": "^1.2.0",
     "sequelize": "^3.30.2",

@@ -1,0 +1,8 @@
+{
+    "mediaRootPath": "/Users/brendenknauss/Pictures/tweet_pics/",
+    "tweetInterval": 600000,
+    "userDataPath": "./user-data.json",
+    "previousMediaPath": "./previous-media.json",
+    "tokensPath": "./tokens.json",
+    "numPreviousMedia": 100
+}

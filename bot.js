@@ -4,7 +4,13 @@ var Twit = require('twit');
 var MediaFetcher = require('./media-fetcher');
 var debug = require('debug')('bot');
 var mime = require('mime');
+var botConfig = require('./bot-config.json');
 var tokens = require("./tokens.json");
+
+
+
+var tokens = require(botConfig["tokensPath"]);
+
 
 var defaultTweetInterval = 1 * 60 * 1000;
 var mediaRoot = '/Users/brendenknauss/Pictures/tweet_pics/';
@@ -59,7 +65,7 @@ Bot.prototype.init = function(beginScheduledTweeting){
 }
 
 Bot.prototype.startTweeting = function(interval){
-    console.log("starting scheduled tweeting.")
+    debug("starting scheduled tweeting.");
     var self = this;
     debug(self);
     interval = interval || defaultTweetInterval;
@@ -89,6 +95,7 @@ Bot.prototype.postMedia = function(mediaItem, mediaId){
         if(error){
             console.log("ERROR[Bot.postMedia]:", error);
         }
+
     });
 }
 Bot.prototype.postRandomMedia = function(){
@@ -158,6 +165,7 @@ Bot.prototype.writeStatus = function(mediaItem){
     return status;
 }
 
+
 function randomInt(max){
     max = Math.floor(max);
     return Math.floor(Math.random() * max);
@@ -165,4 +173,5 @@ function randomInt(max){
 
 var bot = new Bot("nymphonode", tokens, mediaRoot);
 bot.init();
-setTimeout(bot.startTweeting.bind(bot), 15*1000);
+
+bot.startTweeting(1000*30);
