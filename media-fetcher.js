@@ -1,11 +1,12 @@
 var fs = require('fs');
 var path = require('path');
 var _ = require('lodash');
+var mime = require('mime');
 var debug = require('debug')('MediaFetcher');
-var config = require('./bot-config.json');
+// var config = require('./bot-config.json');
 
 // var pm = require(config['previousMediaPath'])['previousMedia'];
-var parentFolderPath = '/Users/brendenknauss/Pictures/tweet_pics/';
+// var parentFolderPath = '/Users/brendenknauss/Pictures/tweet_pics/';
 // Default Refresh Period of 3 hours.
 //var defaultRefreshPeriod = 1000 * 60 * 60 * 3;
 var defaultRefreshPeriod = 1000 * 60 * 3;
@@ -87,6 +88,9 @@ MediaFetcher.prototype.refresh = function(){
             var items = fs.readdirSync(fp);
             items = _.filter(items, (i)=>{
                 if(i.charAt(0) === '.'){
+                    return false;
+                }
+                if(mime.lookup(i) === 'application/octet-stream'){
                     return false;
                 }
                 return fs.statSync(path.join(fp, i)).isFile();

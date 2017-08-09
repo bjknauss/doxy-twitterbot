@@ -6,9 +6,9 @@ var TwitterUser = require('./twitter-user.js');
 var MilestoneUtil = require('./milestone-util.js');
 var events = require('events');
 var debug = require('debug')('user-manager');
-var botConfig = require('./bot-config.json');
-var tokens = require("./tokens.json");
-var sn = require('./misc/twitter_screennames_from_34.json');
+// var botConfig = require('./bot-config.json');
+// var tokens = require("./tokens.json");
+// var sn = require('./misc/twitter_screennames_from_34.json');
 
 /**
  * @param {object} params 
