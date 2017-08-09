@@ -4,35 +4,41 @@ var Twit = require('twit');
 var MediaFetcher = require('./media-fetcher');
 var debug = require('debug')('bot');
 var mime = require('mime');
-var botConfig = require('./bot-config.json');
+// var botConfig = require('./bot-config.json')['bots'][0];
+var botConfig = require('./bot-config.json')['bots'];
 var tokens = require("./tokens.json");
+var sn = require('./misc/twitter_screennames_from_34.json');
+var UserManager = require('./user-manager');
+var TwitRest = require('./twit-rest');
+var TwitStream = require('./twit-stream');
 
-
-
-var tokens = require(botConfig["tokensPath"]);
-
-
-var defaultTweetInterval = 1 * 60 * 1000;
 var mediaRoot = '/Users/brendenknauss/Pictures/tweet_pics/';
 
 
-function Bot(username, twitterParams, mediaRoot){
+function Bot(params){
     var self = this;
-    self.username = username;
-    self.uid = '';
+    self.username = '';
+    self.uid = params['user-id'];
     self.displayName = '';
     self.friendsCount = 0;
     self.followersCount = 0;
-    
+    self.retweetInterval = params['user-manager']['retweetInterval'];
+    self.tweetInterval = params['tweetInterval'];
     self._mentionListId;
     self._mentions = [];
     self._running = false;
     self._scheduler;
     self._friends = [];
     self._retweet_times = {};
-    self._twit = new Twit(twitterParams);
-    self._mf = new MediaFetcher();
-    self._mf.init(mediaRoot);
+    self._twit = new Twit(params['twitter']);
+    self._mf = new MediaFetcher(params['media-fetcher']);
+    self._mf.init();
+    self.userManager = new UserManager(params['user-manager']);
+    self.userManager.load();
+    self.twitRest = new TwitRest(self._twit);
+    self.twitRest.start();
+    self.lists = params['lists'];
+    self.twitStream = new TwitStream(self.uid, self._twit, self.twitRest, self.userManager, self.lists);
     self.isRunning = function(){
         return self._running;
     }
@@ -40,37 +46,114 @@ function Bot(username, twitterParams, mediaRoot){
 
 Bot.prototype.init = function(beginScheduledTweeting){
     var self = this;
-    self._twit.get('users/show', {screen_name: self.username}, (error, data, response) => {
-        if(error){
-            console.log("ERROR[init]:", error);
-            throw error;
-        }
-        self.uid = data.id_str;
-        self.username = data.screen_name;
-        self.displayName = data.name;
-        self.friendsCount = data.friends_count;
-        self.followersCount = data.followers_count;
-        self._twit.get('friends/ids', { stringify_ids: true}, function (error, data, response){
-            self._friends = data.ids;
+    console.log("Initializing bot for twitter id:" + self.uid);
+    // console.log(self.userManager);
+    var promises = [];
+    var userPromise = self.twitRest.user(self.uid)
+        .then((user)=> {
+            // console.log("Entering user....");
+            self.username = user['screen_name'];
+            self.displayName = user['name'];
+            self.friendsCount = user['friends_count'];
+            self.followersCount = user['followers_count'];
+        }).catch((error)=> {
+            if(error){
+                console.log("Couldn't enter User...");
+                console.log(error);
+            }
+        });
+    promises.push(userPromise);
+    promises.push(
+        self.twitRest.friends()
+            .then((users)=> {
+                // console.log("Entering friends...");
+                _.each(users, (user)=>{
+                    var u = self.userManager.updateUser(user);
+                    // u.friend = true;
+                    // u.retweets = true;
+                    // u.trackingMilestone = true;
+                    // u.mentions = true;
+                });
+                self.userManager.setAll('friend', users);
+                _.each(self.lists, (list, property) => {
+                    if(list === "friends"){
+                        self.userManager.setAll(property, users);
+                    }
+                })
+                // console.log(self.userManager);
+            })
+    );
+
+    userPromise.then((users) => {
+        _.each(self.lists, (list, property) => {
+            console.log("property:" + property + ", list:" + list);
+            if(list !== "friends"){
+                debug("LIST OF: %s" + property);
+                promises.push(self.twitRest.listMembers(self.uid, list)
+                    .then((users) => {
+                        self.userManager.update(users);
+                        self.userManager.setAll(property, users);
+                    }).catch((error) => {
+                        console.log(error);
+                    }))
+            }
         });
     });
-    self._twit.get('lists/ownerships', function(err, data, res){
-        var lists = data.lists;
-        var list = _.find(lists, function(li){
-            return li.name === 'Mentions';
-        });
-        self._mentionListId = list.id_str;
-        self.updateMentionsList();
+    
+    Promise.all(promises).then((vals)=> {
+        // console.log("Entering Promise.all...");
+        // debug(self);
+
+        self.userManager.save();
+        self._mf.save();
+        //self.scheduledTweetHandler();
+        self.startTweeting(self.tweetInterval);
+        self.userManager.emitter.on('milestoneReached', self.milestoneReachedHandler.bind(this));
+        self.twitStream.init();
+        self.twitRest.start();
+        self._mf.refresh();
+        // console.log(self.userManager);
     });
 }
+
+
+Bot.prototype.dedicatedRetweetHandler = function(){
+    var self = this;
+    var users = this.userManager.dedicatedRetweets();
+    _.each(users, (user) => {
+        self.twitRest.timeline(user.id)
+            .then((tweet) => {
+                if(_.has(tweet, 'retweeted') && !tweet['retweeted']){
+                    self.twitRest.queueRetweet(tweet['id_str']);
+                }
+            });
+    });
+}
+
+Bot.prototype.scheduledTweetHandler = function(){
+    var media = this._mf.randomMedia();
+    var status = this.writeStatus(media);
+    this.twitRest.tweet(status, media);
+    this.userManager.save();
+    this._mf.save();
+}
+
+Bot.prototype.milestoneReachedHandler = function(user, milestone){
+    var media = this._mf.randomMedia();
+    var status = "Congratulations to @" + user.screenName;
+    status += " on " + milestone + " followers!";
+    debug("milestoneReachedHandler: %s", user.name);
+    this.twitRest.tweet(status, media);
+}
+
 
 Bot.prototype.startTweeting = function(interval){
     debug("starting scheduled tweeting.");
     var self = this;
-    debug(self);
+    // debug(self);
     interval = interval || defaultTweetInterval;
     if(!self._running){
-        self._scheduler = setInterval(self.postRandomMedia.bind(self), interval);
+        self._scheduler = setInterval(self.scheduledTweetHandler.bind(self), interval);
     }
 }
 
@@ -80,7 +163,6 @@ Bot.prototype.stopTweeting = function(){
         clearInterval(self._scheduler);
     }
     self._running = false;
-
 }
 
 
@@ -90,7 +172,7 @@ Bot.prototype.postMedia = function(mediaItem, mediaId){
         status: self.writeStatus(mediaItem),
         media_ids: mediaId
     };
-
+    debug(tweet);
     self._twit.post('statuses/update', tweet, (error, data, response) => {
         if(error){
             console.log("ERROR[Bot.postMedia]:", error);
@@ -119,48 +201,14 @@ Bot.prototype.postRandomMedia = function(){
     }
 }
 
-Bot.prototype.updateMentionsList = function (){
-    debug("updating Mentions List");
-    var self = this;
-    var params = {
-        list_id: self._mentionListId,
-        include_entities: false,
-        skip_status: true
-    };
-    self._twit.get('lists/members', params, (err, data, res) => {
-        if(err){
-            console.log('ERROR[updateMentionsList]:', err);
-        }
-        var users = data.users;
-        self._mentions = _.map(users, function (o){
-            return {
-                id: o.id_str,
-                screen_name: o.screen_name,
-                followers: o.followers_count
-            };
-        });
-    });
-}
 
-Bot.prototype.randomMention = function(){
-    var self = this;
-    var index = randomInt(self._mentions.length);
-    return "@" + self._mentions[index].screen_name;
-}
-
-Bot.prototype.updateFriends = function(){
-    var self = this;
-    self._twit.get('friends/ids', { stringify_ids: true}, function (error, data, response){
-        self._friends = data.ids;
-    });
-}
 
 Bot.prototype.writeStatus = function(mediaItem){
-    var self = this;
     var i = 0;
-    var status = "#lewd #hentai #" + mediaItem.parent;
+    var status = "#lewd #hentai #" + mediaItem.parent + '\n';
     for(i = 0; i < 3; i++){
-        status += '\n' + self.randomMention();
+        var m = this.userManager.randomMention();
+        status += '\n' + '@' + m.screenName; 
     }
     return status;
 }
@@ -171,7 +219,12 @@ function randomInt(max){
     return Math.floor(Math.random() * max);
 }
 
-var bot = new Bot("nymphonode", tokens, mediaRoot);
-bot.init();
+_.each(botConfig, (botInfo) => {
+    var bot = new Bot(botInfo);
+    bot.init();
+});
 
-bot.startTweeting(1000*30);
+// var bot = new Bot(botConfig);
+// bot.init();
+// console.log("test");
+// bot.startTweeting(1000*30);
